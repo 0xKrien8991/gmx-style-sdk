@@ -1,19 +1,19 @@
-# UpDown SDK
+# GMX-Style SDK
 
-基于 Node.js/TypeScript 的 [UpDown](https://app.updown.xyz) 去中心化永续合约交易所 SDK（Celo 链），支持开仓和平仓操作。
+基于 Node.js/TypeScript 的 GMX V2 风格去中心化永续合约交易所 SDK（Celo 链）。
 
-UpDown 是 GMX V2 的 Fork，支持低滑点永续合约交易，最高 100 倍杠杆。
+> ⚠️ 本 SDK 目前仅支持 **开仓**（MarketIncrease）和 **平仓**（MarketDecrease）操作。
 
 ## 安装
 
 ```bash
-npm install @updown/sdk
+npm install gmx-style-sdk
 ```
 
 ## 快速开始
 
 ```typescript
-import { UpdownSDK } from "@updown/sdk";
+import { UpdownSDK } from "gmx-style-sdk";
 import { ethers } from "ethers";
 
 const sdk = UpdownSDK.fromPrivateKey("YOUR_PRIVATE_KEY");

@@ -1,7 +1,7 @@
 {
-  "name": "@updown/sdk",
+  "name": "gmx-style-sdk",
   "version": "1.0.0",
-  "description": "UpDown Perpetual Exchange SDK - Open & Close positions on Celo",
+  "description": "A GMX-style perpetual exchange SDK for opening and closing positions on Celo chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -12,13 +12,14 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "updown",
+    "gmx",
     "perpetual",
     "dex",
     "celo",
-    "gmx",
     "trading",
-    "sdk"
+    "sdk",
+    "open-position",
+    "close-position"
   ],
   "license": "MIT",
   "dependencies": {

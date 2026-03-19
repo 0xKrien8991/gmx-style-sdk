@@ -1,19 +1,19 @@
-# UpDown SDK
+# GMX-Style SDK
 
-A Node.js/TypeScript SDK for opening and closing perpetual positions on the [UpDown](https://app.updown.xyz) decentralized exchange (Celo chain).
+A Node.js/TypeScript SDK for **opening and closing** perpetual positions on GMX V2-style decentralized exchanges (Celo chain).
 
-UpDown is a GMX V2 fork that supports low-slippage perpetual trades with up to 100x leverage.
+> ⚠️ This SDK currently only supports **open position** (MarketIncrease) and **close position** (MarketDecrease) operations.
 
 ## Installation
 
 ```bash
-npm install @updown/sdk
+npm install gmx-style-sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { UpdownSDK } from "@updown/sdk";
+import { UpdownSDK } from "gmx-style-sdk";
 import { ethers } from "ethers";
 
 const sdk = UpdownSDK.fromPrivateKey("YOUR_PRIVATE_KEY");
