@@ -1,0 +1,30 @@
+{
+  "name": "@updown/sdk",
+  "version": "1.0.0",
+  "description": "UpDown Perpetual Exchange SDK - Open & Close positions on Celo",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "updown",
+    "perpetual",
+    "dex",
+    "celo",
+    "gmx",
+    "trading",
+    "sdk"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
