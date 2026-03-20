@@ -131,10 +131,15 @@ export class UpdownSDK {
       orderParams
     );
 
-    return this.sendAndConfirm(
-      () => this.exchangeRouter.multicall(multicallData, { value: params.executionFee }),
-      "openPosition"
-    );
+    return this.sendAndConfirm(async () => {
+      const nonce = await this.getNonce();
+      const gasLimit = await this.estimateGasWithBuffer(multicallData, params.executionFee);
+      return this.exchangeRouter.multicall(multicallData, {
+        value: params.executionFee,
+        nonce,
+        gasLimit,
+      });
+    }, "openPosition");
   }
 
   /**
@@ -186,14 +191,49 @@ export class UpdownSDK {
       orderParams
     );
 
-    return this.sendAndConfirm(
-      () => this.exchangeRouter.multicall(multicallData, { value: params.executionFee }),
-      "closePosition"
-    );
+    return this.sendAndConfirm(async () => {
+      const nonce = await this.getNonce();
+      const gasLimit = await this.estimateGasWithBuffer(multicallData, params.executionFee);
+      return this.exchangeRouter.multicall(multicallData, {
+        value: params.executionFee,
+        nonce,
+        gasLimit,
+      });
+    }, "closePosition");
+  }
+
+  /**
+   * 估算 gasLimit 并加 20% buffer，防止 out of gas
+   */
+  private async estimateGasWithBuffer(
+    multicallData: string[],
+    value: bigint
+  ): Promise<bigint> {
+    try {
+      const estimated = await this.exchangeRouter.multicall.estimateGas(
+        multicallData,
+        { value }
+      );
+      return (estimated * 120n) / 100n; // +20% buffer
+    } catch {
+      return 3_000_000n; // 估算失败时使用默认值
+    }
+  }
+
+  /**
+   * 获取当前 pending nonce，防止并发交易冲突
+   */
+  private async getNonce(): Promise<number> {
+    const address = await this.signer.getAddress();
+    const provider = this.signer.provider;
+    if (!provider) throw new SDKError("No provider available");
+    return provider.getTransactionCount(address, "pending");
   }
 
   /**
    * 发送交易并等待确认, 统一的错误处理
+   * - 自动获取 pending nonce
+   * - 自动估算 gasLimit (加 20% buffer)
    */
   private async sendAndConfirm(
     txFn: () => Promise<ethers.TransactionResponse>,
@@ -201,7 +241,7 @@ export class UpdownSDK {
   ): Promise<OrderResult> {
     let tx: ethers.TransactionResponse;
 
-    // 发送交易
+    // 发送交易（含 nonce 管理）
     try {
       tx = await txFn();
     } catch (err: unknown) {

@@ -4,7 +4,7 @@
 
 基于 Node.js/TypeScript 的 GMX V2 风格去中心化永续合约交易所 SDK（Celo 链）。
 
-> ⚠️ 本 SDK 目前仅支持 **开仓**（MarketIncrease）和 **平仓**（MarketDecrease）操作。
+> ⚠️ 本 SDK 支持**开仓**和**平仓**操作，包含市价单、限价单和止损单三种订单类型。
 
 ## 安装
 
@@ -192,8 +192,6 @@ multicall([
 - 支持 Market、Limit、Stop-Loss 订单，不支持 TWAP 订单
 - 未集成 Reader 合约 — 无法链上查询持仓、价格、流动性
 - 仅支持私钥导入 — 暂不支持钱包连接（MetaMask / WalletConnect）
-- 无并发 nonce 管理
-- 无 gas 自动估算 — 使用默认 gas limit
 
 ## 构建
 

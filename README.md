@@ -4,7 +4,7 @@
 
 A Node.js/TypeScript SDK for **opening and closing** perpetual positions on GMX V2-style decentralized exchanges (Celo chain).
 
-> ⚠️ This SDK currently only supports **open position** (MarketIncrease) and **close position** (MarketDecrease) operations.
+> ⚠️ This SDK supports **open position** and **close position** with Market, Limit, and Stop-Loss order types.
 
 ## Installation
 
@@ -192,8 +192,6 @@ After order creation, a keeper will execute the order on-chain.
 - Supports Market, Limit, and Stop-Loss orders. No TWAP orders.
 - No Reader contract integration — cannot query positions, prices, or liquidity on-chain.
 - Private key only — no wallet connection (MetaMask / WalletConnect) support yet.
-- No nonce management for concurrent transactions.
-- No gas estimation — uses default gas limits.
 
 ## Build
 
