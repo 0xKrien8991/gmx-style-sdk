@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README_CN.md)
+
 # GMX-Style SDK
 
 A Node.js/TypeScript SDK for **opening and closing** perpetual positions on GMX V2-style decentralized exchanges (Celo chain).

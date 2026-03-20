@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README_CN.md)
+
 # GMX-Style SDK
 
 基于 Node.js/TypeScript 的 GMX V2 风格去中心化永续合约交易所 SDK（Celo 链）。
