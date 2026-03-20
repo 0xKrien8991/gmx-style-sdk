@@ -15,16 +15,22 @@ import {
   OrderType,
   DecreasePositionSwapType,
   UpdownConfig,
+  OrderResult,
+  SDKError,
 } from "./types";
 
 export class UpdownSDK {
   private signer: Signer;
   private contracts: ContractAddresses;
   private exchangeRouter: Contract;
+  private confirmations: number;
+  private txTimeout: number;
 
   constructor(signer: Signer, config?: UpdownConfig) {
     this.signer = signer;
     this.contracts = { ...DEFAULT_CONTRACTS, ...config?.contracts };
+    this.confirmations = config?.confirmations ?? 1;
+    this.txTimeout = config?.txTimeout ?? 60000;
     this.exchangeRouter = new Contract(
       this.contracts.exchangeRouter,
       ExchangeRouterABI,
@@ -41,6 +47,21 @@ export class UpdownSDK {
     );
     const signer = new ethers.Wallet(privateKey, provider);
     return new UpdownSDK(signer, config);
+  }
+
+  /**
+   * 从环境变量创建 SDK 实例
+   * 读取 PRIVATE_KEY 和可选的 RPC_URL
+   */
+  static fromEnv(config?: UpdownConfig): UpdownSDK {
+    const privateKey = process.env.PRIVATE_KEY;
+    if (!privateKey) {
+      throw new SDKError("Environment variable PRIVATE_KEY is not set");
+    }
+    return UpdownSDK.fromPrivateKey(privateKey, {
+      rpcUrl: process.env.RPC_URL,
+      ...config,
+    });
   }
 
   /**
@@ -66,10 +87,9 @@ export class UpdownSDK {
    * 开仓 - 创建 MarketIncrease 订单
    *
    * 流程: multicall([sendWnt, sendTokens, createOrder])
+   * 返回 OrderResult, 包含交易回执和解析后的日志
    */
-  async openPosition(
-    params: OpenPositionParams
-  ): Promise<ethers.TransactionResponse> {
+  async openPosition(params: OpenPositionParams): Promise<OrderResult> {
     const account = await this.signer.getAddress();
 
     const orderParams: CreateOrderParams = {
@@ -85,19 +105,24 @@ export class UpdownSDK {
       numbers: {
         sizeDeltaUsd: params.sizeDeltaUsd,
         initialCollateralDeltaAmount: params.collateralAmount,
-        triggerPrice: 0n,
+        triggerPrice: params.triggerPrice ?? 0n,
         acceptablePrice: params.acceptablePrice,
         executionFee: params.executionFee,
         callbackGasLimit: 0n,
         minOutputAmount: 0n,
       },
-      orderType: OrderType.MarketIncrease,
+      orderType: params.orderType ?? OrderType.MarketIncrease,
       decreasePositionSwapType: DecreasePositionSwapType.NoSwap,
       isLong: params.isLong,
       shouldUnwrapNativeToken: false,
       autoCancel: false,
       referralCode: params.referralCode ?? ZERO_BYTES32,
     };
+
+    // 限价单必须提供 triggerPrice
+    if (orderParams.orderType === OrderType.LimitIncrease && !params.triggerPrice) {
+      throw new SDKError("LimitIncrease order requires triggerPrice");
+    }
 
     const multicallData = this.buildOpenMulticall(
       params.executionFee,
@@ -106,19 +131,19 @@ export class UpdownSDK {
       orderParams
     );
 
-    return this.exchangeRouter.multicall(multicallData, {
-      value: params.executionFee,
-    });
+    return this.sendAndConfirm(
+      () => this.exchangeRouter.multicall(multicallData, { value: params.executionFee }),
+      "openPosition"
+    );
   }
 
   /**
    * 平仓 - 创建 MarketDecrease 订单
    *
    * 流程: multicall([sendWnt, createOrder])
+   * 返回 OrderResult, 包含交易回执和解析后的日志
    */
-  async closePosition(
-    params: ClosePositionParams
-  ): Promise<ethers.TransactionResponse> {
+  async closePosition(params: ClosePositionParams): Promise<OrderResult> {
     const account = await this.signer.getAddress();
 
     const orderParams: CreateOrderParams = {
@@ -134,13 +159,13 @@ export class UpdownSDK {
       numbers: {
         sizeDeltaUsd: params.sizeDeltaUsd,
         initialCollateralDeltaAmount: params.initialCollateralDeltaAmount ?? 0n,
-        triggerPrice: 0n,
+        triggerPrice: params.triggerPrice ?? 0n,
         acceptablePrice: params.acceptablePrice,
         executionFee: params.executionFee,
         callbackGasLimit: 0n,
         minOutputAmount: params.minOutputAmount ?? 0n,
       },
-      orderType: OrderType.MarketDecrease,
+      orderType: params.orderType ?? OrderType.MarketDecrease,
       decreasePositionSwapType:
         params.decreasePositionSwapType ?? DecreasePositionSwapType.NoSwap,
       isLong: params.isLong,
@@ -149,14 +174,98 @@ export class UpdownSDK {
       referralCode: params.referralCode ?? ZERO_BYTES32,
     };
 
+    // 限价/止损单必须提供 triggerPrice
+    const needsTrigger = orderParams.orderType === OrderType.LimitDecrease
+      || orderParams.orderType === OrderType.StopLossDecrease;
+    if (needsTrigger && !params.triggerPrice) {
+      throw new SDKError("LimitDecrease/StopLossDecrease order requires triggerPrice");
+    }
+
     const multicallData = this.buildCloseMulticall(
       params.executionFee,
       orderParams
     );
 
-    return this.exchangeRouter.multicall(multicallData, {
-      value: params.executionFee,
-    });
+    return this.sendAndConfirm(
+      () => this.exchangeRouter.multicall(multicallData, { value: params.executionFee }),
+      "closePosition"
+    );
+  }
+
+  /**
+   * 发送交易并等待确认, 统一的错误处理
+   */
+  private async sendAndConfirm(
+    txFn: () => Promise<ethers.TransactionResponse>,
+    operation: string
+  ): Promise<OrderResult> {
+    let tx: ethers.TransactionResponse;
+
+    // 发送交易
+    try {
+      tx = await txFn();
+    } catch (err: unknown) {
+      const revertReason = this.parseRevertReason(err);
+      throw new SDKError(
+        `${operation} failed to send transaction: ${revertReason || (err instanceof Error ? err.message : String(err))}`,
+        { cause: err, revertReason: revertReason || undefined }
+      );
+    }
+
+    // 等待确认
+    try {
+      const receipt = await Promise.race([
+        tx.wait(this.confirmations),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Transaction confirmation timeout")), this.txTimeout)
+        ),
+      ]);
+
+      if (!receipt) {
+        throw new SDKError(`${operation} transaction returned null receipt`, { txHash: tx.hash });
+      }
+
+      if (receipt.status === 0) {
+        throw new SDKError(`${operation} transaction reverted`, {
+          txHash: tx.hash,
+          revertReason: "Transaction reverted on-chain",
+        });
+      }
+
+      return {
+        hash: tx.hash,
+        receipt,
+        logs: receipt.logs as ethers.Log[],
+      };
+    } catch (err: unknown) {
+      if (err instanceof SDKError) throw err;
+      const revertReason = this.parseRevertReason(err);
+      throw new SDKError(
+        `${operation} failed during confirmation: ${revertReason || (err instanceof Error ? err.message : String(err))}`,
+        { cause: err, txHash: tx.hash, revertReason: revertReason || undefined }
+      );
+    }
+  }
+
+  /**
+   * 从错误中解析 revert reason
+   */
+  private parseRevertReason(err: unknown): string | null {
+    if (err && typeof err === "object") {
+      const e = err as Record<string, unknown>;
+      // ethers v6 format
+      if (typeof e.reason === "string") return e.reason;
+      if (typeof e.shortMessage === "string") return e.shortMessage;
+      // nested revert data
+      if (e.data && typeof e.data === "string") {
+        try {
+          return ethers.toUtf8String("0x" + (e.data as string).slice(138));
+        } catch {
+          return e.data as string;
+        }
+      }
+    }
+    return null;
   }
 
   /**

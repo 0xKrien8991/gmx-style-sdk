@@ -2,11 +2,13 @@ export { UpdownSDK } from "./UpdownSDK";
 export {
   OrderType,
   DecreasePositionSwapType,
+  SDKError,
   type OpenPositionParams,
   type ClosePositionParams,
   type UpdownConfig,
   type ContractAddresses,
   type CreateOrderParams,
+  type OrderResult,
 } from "./types";
 export {
   DEFAULT_CONTRACTS,
